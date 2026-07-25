@@ -1,0 +1,28 @@
+name: Continuous integration
+on: [push]
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  ci:
+    runs-on: [windows-latest]
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+
+          fetch-depth: 100
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: "
+            ./rscxx
+            ./cargo-rscxx-dist
+          "
+      - run: cargo install --path ./cargo-rscxx-dist
+      - run: cargo rscxx-dist -o ../rscxx_run/lib/rscxx
+        working-directory: ./rscxx
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          path: ../rscxx_run/lib/rscxx
