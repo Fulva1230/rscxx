@@ -5,6 +5,9 @@ pub fn add(left: u64, right: u64) -> u64 {
 fn string_concat(left: &str, right: &str) -> String {
     left.to_owned() + right
 }
+fn integer_add(left: i32, right: i32) -> i32 {
+    left + right
+}
 
 #[cxx::bridge]
 mod ffi {
@@ -12,7 +15,6 @@ mod ffi {
         fn string_concat(left: &str, right: &str) -> String;
     }
 }
-
 
 #[cfg(test)]
 mod tests {

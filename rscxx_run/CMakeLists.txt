@@ -5,7 +5,7 @@ project(rscxx_run VERSION 0.1
                   LANGUAGES CXX)
 include(FetchContent)
 
-add_subdirectory(lib/rscxx)
+find_package(Rscxx REQUIRED)
 
 add_executable(rscxx_run src/main.cpp)
 target_include_directories(rscxx_run PUBLIC include)

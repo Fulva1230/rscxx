@@ -10,5 +10,5 @@
 
 int main(int argc, char *argv[]) {
     auto concatted = string_concat("Hello ", "world!");
-    std::cout << concatted << std::endl;
+    std::cout << concatted << std::endl;;
 }

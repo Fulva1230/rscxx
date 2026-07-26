@@ -26,16 +26,13 @@ fn recursive_copy_header(
     }
     Ok(())
 }
-fn copy_lib_or_dll(
+fn copy_files_with_extension(
     from: impl AsRef<std::path::Path>,
     dest: impl AsRef<std::path::Path>,
+    extension: &str,
 ) -> anyhow::Result<()> {
     for file in walkdir::WalkDir::new(&from).into_iter().flatten() {
-        if file
-            .path()
-            .extension()
-            .is_some_and(|e| e == "lib" || e == "dll")
-        {
+        if file.path().extension().is_some_and(|e| e == extension) {
             let dest_file_path = dest.as_ref().join(file.file_name());
             std::fs::copy(file.path(), dest_file_path)?;
         }
@@ -47,6 +44,8 @@ fn main() -> anyhow::Result<()> {
 
     let dist = args.output_dir;
     std::fs::create_dir_all(&dist)?;
+    std::fs::create_dir_all(dist.join("bin"))?;
+    std::fs::create_dir_all(dist.join("lib"))?;
 
     let cargo_cmd = env::var("CARGO")?;
     let build_res = Command::new(cargo_cmd)
@@ -64,13 +63,28 @@ fn main() -> anyhow::Result<()> {
             match message {
                 cargo_metadata::Message::CompilerArtifact(artifact) => {
                     if artifact.target.name == "rscxx" {
-                        for file in artifact.filenames.iter().filter(|file| {
-                            file.extension().is_some_and(|e| e == "lib" || e == "dll")
+                        for (ext, file) in artifact.filenames.iter().filter_map(|file| {
+                            if let Some(ext) = file.extension() {
+                                Some((ext, file))
+                            } else {
+                                None
+                            }
                         }) {
-                            std::fs::copy(
-                                file,
-                                dist.join(file.file_name().context("file name extract failed")?),
-                            )?;
+                            let dest =
+                                if ext == "lib" {
+                                    Some(dist.join("lib").join(
+                                        file.file_name().context("file name extract failed")?,
+                                    ))
+                                } else if ext == "dll" {
+                                    Some(dist.join("bin").join(
+                                        file.file_name().context("file name extract failed")?,
+                                    ))
+                                } else {
+                                    None
+                                };
+                            if let Some(dest) = dest {
+                                std::fs::copy(file, dest)?;
+                            }
                         }
                     }
                 }
@@ -81,13 +95,13 @@ fn main() -> anyhow::Result<()> {
                         .iter()
                         .any(|lib| lib.as_str().contains("cxxbridge1"))
                     {
-                        copy_lib_or_dll(&build.out_dir, &dist)?;
+                        copy_files_with_extension(&build.out_dir, dist.join("lib"), "lib")?;
                     } else if build
                         .linked_libs
                         .iter()
                         .any(|lib| lib.as_str().contains("rscxx"))
                     {
-                        copy_lib_or_dll(&build.out_dir, &dist)?;
+                        copy_files_with_extension(&build.out_dir, dist.join("lib"), "lib")?;
                         recursive_copy_header(
                             build.out_dir.join("cxxbridge/crate"),
                             dist.join("include"),
