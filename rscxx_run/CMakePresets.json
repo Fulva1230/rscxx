@@ -14,7 +14,7 @@
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
       "cacheVariables": {
-        "Rscxx_ROOT": "${sourceDir}/lib/rscxx"
+        "rscxx_ROOT": "${sourceDir}/lib/rscxx"
       }
     },
     {
