@@ -3,6 +3,7 @@ use clap::Parser;
 use std::env;
 use std::path::PathBuf;
 use std::process::Command;
+use glob::glob;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -17,25 +18,19 @@ fn recursive_copy_header(
     from: impl AsRef<std::path::Path>,
     dest: impl AsRef<std::path::Path>,
 ) -> anyhow::Result<()> {
-    for file in walkdir::WalkDir::new(&from).into_iter().flatten() {
-        if file.path().extension().is_some_and(|e| e == "h") {
-            let dest_file_path = dest.as_ref().join(file.path().strip_prefix(&from)?);
-            std::fs::create_dir_all(dest_file_path.parent().context("no parent")?)?;
-            std::fs::copy(file.path(), dest_file_path)?;
-        }
+    for file in glob(from.as_ref().join("**/*.h").as_os_str().to_str().context("is not str")?)?.flatten() {
+        let dest_file_path = dest.as_ref().join(file.strip_prefix(&from)?);
+        std::fs::create_dir_all(dest_file_path.parent().context("no parent")?)?;
+        std::fs::copy(file, dest_file_path)?;
     }
     Ok(())
 }
-fn copy_files_with_extension(
-    from: impl AsRef<std::path::Path>,
+fn copy_files(
+    pattern: &str,
     dest: impl AsRef<std::path::Path>,
-    extension: &str,
 ) -> anyhow::Result<()> {
-    for file in walkdir::WalkDir::new(&from).into_iter().flatten() {
-        if file.path().extension().is_some_and(|e| e == extension) {
-            let dest_file_path = dest.as_ref().join(file.file_name());
-            std::fs::copy(file.path(), dest_file_path)?;
-        }
+    for file in glob(pattern)?.flatten() {
+        std::fs::copy(&file, dest.as_ref().join(file.file_name().context("file name error")?))?;
     }
     Ok(())
 }
@@ -95,13 +90,13 @@ fn main() -> anyhow::Result<()> {
                         .iter()
                         .any(|lib| lib.as_str().contains("cxxbridge1"))
                     {
-                        copy_files_with_extension(&build.out_dir, dist.join("lib"), "lib")?;
+                        copy_files(&build.out_dir.join("**/*.lib").as_str(), &dist.join("lib"))?;
                     } else if build
                         .linked_libs
                         .iter()
                         .any(|lib| lib.as_str().contains("rscxx"))
                     {
-                        copy_files_with_extension(&build.out_dir, dist.join("lib"), "lib")?;
+                        copy_files(&build.out_dir.join("**/*.lib").as_str(), &dist.join("lib"))?;
                         recursive_copy_header(
                             build.out_dir.join("cxxbridge/crate"),
                             dist.join("include"),
