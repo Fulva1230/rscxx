@@ -1,9 +1,9 @@
 use anyhow::Context;
+use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
+use glob::glob;
 use std::env;
 use std::process::Command;
-use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
-use glob::glob;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -24,16 +24,19 @@ fn recursive_copy_header(
     {
         let dest_file_path = dest.as_ref().join(file.strip_prefix(from.as_ref())?);
         std::fs::create_dir_all(dest_file_path.parent().context("no parent")?)?;
-        std::fs::copy(file, dest_file_path)?;
+        std::fs::copy(&file, dest_file_path)
+            .with_context(|| format!("copy {:?} failed", &file))?;
     }
     Ok(())
 }
-fn copy_files(
-    pattern: &str,
-    dest: impl AsRef<std::path::Path>,
-) -> anyhow::Result<()> {
+fn copy_files(pattern: &str, dest: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
     for file in glob(pattern)?.flatten() {
-        std::fs::copy(&file, dest.as_ref().join(file.file_name().context("file name error")?))?;
+        std::fs::copy(
+            &file,
+            dest.as_ref()
+                .join(file.file_name().context("file name error")?),
+        )
+        .with_context(|| format!("copy {:?} failed", &file))?;
     }
     Ok(())
 }
