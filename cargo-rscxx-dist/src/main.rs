@@ -1,8 +1,8 @@
 use anyhow::Context;
 use clap::Parser;
 use std::env;
-use std::path::PathBuf;
 use std::process::Command;
+use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
 use glob::glob;
 
 #[derive(Parser, Debug)]
@@ -12,14 +12,17 @@ struct Args {
     cmd: String,
 
     #[arg(short, long, default_value = "dist")]
-    output_dir: PathBuf,
+    output_dir: Utf8PathBuf,
 }
 fn recursive_copy_header(
-    from: impl AsRef<std::path::Path>,
-    dest: impl AsRef<std::path::Path>,
+    from: impl AsRef<Utf8Path>,
+    dest: impl AsRef<Utf8Path>,
 ) -> anyhow::Result<()> {
-    for file in glob(from.as_ref().join("**/*.h").as_os_str().to_str().context("is not str")?)?.flatten() {
-        let dest_file_path = dest.as_ref().join(file.strip_prefix(&from)?);
+    for file in glob(from.as_ref().join("**/*.h").as_str())?
+        .flatten()
+        .flat_map(Utf8PathBuf::from_path_buf)
+    {
+        let dest_file_path = dest.as_ref().join(file.strip_prefix(from.as_ref())?);
         std::fs::create_dir_all(dest_file_path.parent().context("no parent")?)?;
         std::fs::copy(file, dest_file_path)?;
     }
