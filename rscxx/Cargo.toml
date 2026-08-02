@@ -11,5 +11,4 @@ cxx = "1.0"
 
 [build-dependencies]
 cxx-build = "1.0"
-walkdir = "2"
 anyhow = "1"

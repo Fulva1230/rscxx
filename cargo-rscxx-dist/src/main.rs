@@ -1,9 +1,9 @@
 use anyhow::Context;
 use cargo_metadata::camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
-use glob::glob;
 use std::env;
 use std::process::Command;
+use walkdir::WalkDir;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -14,29 +14,29 @@ struct Args {
     #[arg(short, long, default_value = "dist")]
     output_dir: Utf8PathBuf,
 }
-fn recursive_copy_header(
+fn copy_files(
     from: impl AsRef<Utf8Path>,
-    dest: impl AsRef<Utf8Path>,
+    into: impl AsRef<Utf8Path>,
+    glob_pattern: &str,
+    preserve_structure: bool,
 ) -> anyhow::Result<()> {
-    for file in glob(from.as_ref().join("**/*.h").as_str())?
-        .flatten()
-        .flat_map(Utf8PathBuf::from_path_buf)
-    {
-        let dest_file_path = dest.as_ref().join(file.strip_prefix(from.as_ref())?);
-        std::fs::create_dir_all(dest_file_path.parent().context("no parent")?)?;
-        std::fs::copy(&file, dest_file_path)
-            .with_context(|| format!("copy {:?} failed", &file))?;
-    }
-    Ok(())
-}
-fn copy_files(pattern: &str, dest: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
-    for file in glob(pattern)?.flatten() {
-        std::fs::copy(
-            &file,
-            dest.as_ref()
-                .join(file.file_name().context("file name error")?),
-        )
-        .with_context(|| format!("copy {:?} failed", &file))?;
+    let from = from.as_ref();
+    let into = into.as_ref();
+    let glob_pattern = glob::Pattern::new(glob_pattern)?;
+    for file in WalkDir::new(from).into_iter().flatten() {
+        let file_path = Utf8Path::from_path(file.path()).context("path is not utf8")?;
+        let file_subpath = file_path.strip_prefix(from)?;
+        if glob_pattern.matches_path(file_subpath.as_std_path()) {
+            let dest_file_path = if preserve_structure {
+                into.join(file_subpath)
+            } else {
+                into.join(file_path.file_name().context("no filename")?)
+            };
+            if let Some(parent) = dest_file_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(file.path(), dest_file_path)?;
+        }
     }
     Ok(())
 }
@@ -96,21 +96,15 @@ fn main() -> anyhow::Result<()> {
                         .iter()
                         .any(|lib| lib.as_str().contains("cxxbridge1"))
                     {
-                        copy_files(&build.out_dir.join("**/*.lib").as_str(), &dist.join("lib"))?;
+                        copy_files(&build.out_dir, &dist.join("lib"), "**/*.lib", false)?;
                     } else if build
                         .linked_libs
                         .iter()
                         .any(|lib| lib.as_str().contains("rscxx"))
                     {
-                        copy_files(&build.out_dir.join("**/*.lib").as_str(), &dist.join("lib"))?;
-                        recursive_copy_header(
-                            build.out_dir.join("cxxbridge/crate"),
-                            dist.join("include"),
-                        )?;
-                        recursive_copy_header(
-                            build.out_dir.join("cxxbridge/include"),
-                            dist.join("include"),
-                        )?;
+                        copy_files(&build.out_dir, &dist.join("lib"), "**/*.lib", false)?;
+                        copy_files(&build.out_dir.join("cxxbridge/crate"), &dist.join("include"), "**/*.h", true)?;
+                        copy_files(&build.out_dir.join("cxxbridge/include"), &dist.join("include"), "**/*.h", true)?;
                     }
                 }
                 cargo_metadata::Message::BuildFinished(_) => {}
